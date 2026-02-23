@@ -1,0 +1,8 @@
+engine/__pycache__/
+engine/routers/__pycache__/
+engine/services/__pycache__/
+engine/tests/__pycache__/
+engine/ttrpg.db
+__pycache__/
+*.pyc
+.env

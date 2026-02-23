@@ -1,0 +1,15 @@
+version: '3.9'
+services:
+  engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      - ENGINE_KEY=${ENGINE_KEY:-dev-secret-key}
+      - DATABASE_URL=sqlite:///./data/ttrpg.db
+    volumes:
+      - engine_data:/app/data
+volumes:
+  engine_data:
