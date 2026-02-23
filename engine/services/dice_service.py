@@ -34,7 +34,7 @@ def roll_dice(expr: str) -> Tuple[int, str]:
     rolls = [random.randint(1, sides) for _ in range(count)]
     total = sum(rolls) + modifier
 
-    rolls_str = str(rolls[0]) if len(rolls) == 1 else str(rolls)
+    rolls_str = str(rolls) if len(rolls) > 1 else f"[{rolls[0]}]"
 
     if modifier > 0:
         breakdown = f"{expr}: {rolls_str}+{modifier}={total}"

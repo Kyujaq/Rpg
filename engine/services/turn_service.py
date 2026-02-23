@@ -70,10 +70,6 @@ def advance_turn(db: Session, campaign_id: str) -> TurnAdvanceOut:
 
     campaign.turn_owner = next_owner_id
     campaign.ai_only_streak = streak
-    # floor_lock records who holds the current turn, used to prevent
-    # out-of-turn actions. Enforcement should be added in the events/mutate
-    # routers by comparing the acting actor against campaign.floor_lock.
-    # TODO: add floor_lock guard middleware in routers/events.py and routers/campaigns.py
     campaign.floor_lock = next_owner_id
     campaign.floor_lock_at = datetime.utcnow()
 
