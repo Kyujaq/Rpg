@@ -183,7 +183,7 @@ class Tools:
         """
         return self._post("/turn/advance", {})
 
-    def memory_write(self, scope: str, text: str, tags: list | None = None) -> str:
+    def memory_write(self, scope: str, text: str, tags: list[str] | None = None) -> str:
         """
         Write a memory entry to the campaign memory store.
 

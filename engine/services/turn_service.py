@@ -70,6 +70,8 @@ def advance_turn(db: Session, campaign_id: str) -> TurnAdvanceOut:
 
     campaign.turn_owner = next_owner_id
     campaign.ai_only_streak = streak
+    # floor_lock records who holds the current turn, used to prevent
+    # out-of-turn actions (enforcement left to callers/future middleware)
     campaign.floor_lock = next_owner_id
     campaign.floor_lock_at = datetime.utcnow()
 
