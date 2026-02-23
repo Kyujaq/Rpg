@@ -9,6 +9,8 @@ class Campaign(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # state_json is reserved for bulk-snapshot serialization of arbitrary campaign state.
+    # Fine-grained key/value state is stored in the state_kv table (see StateKV model).
     state_json = Column(String, default="{}")
     ai_only_streak = Column(Integer, default=0)
     turn_owner = Column(String, default="dm")

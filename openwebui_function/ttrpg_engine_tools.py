@@ -120,7 +120,9 @@ class Tools:
         """
         Get the current campaign state visible to the given actor.
 
-        :param viewer: Actor ID of the viewer (defaults to the configured actor).
+        :param viewer: Actor ID of the viewer. Pass an explicit actor ID to filter
+            visibility from that actor's perspective. If omitted or empty, defaults
+            to the actor ID resolved from MODEL_TO_ACTOR for the current model.
         :return: JSON string with campaign state.
         """
         actor = viewer or self._actor()
