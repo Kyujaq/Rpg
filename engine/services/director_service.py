@@ -194,5 +194,9 @@ def next_director_context(db: Session, campaign_id: str, body: DirectorNextReque
             party=grouped["party"],
             private=grouped["private"],
         ),
-        constraints=DirectorConstraintsOut(must_ask_question=must_refocus, max_output_sentences=6),
+        constraints=DirectorConstraintsOut(
+            must_ask_question=must_refocus,
+            max_output_sentences=6,
+            stop_after_act=True if must_refocus else None,
+        ),
     )

@@ -5,7 +5,7 @@ Provides tools for interacting with the TTRPG Game Engine API.
 
 import json
 import os
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -20,43 +20,6 @@ MODEL_TO_ACTOR: dict[str, str] = {
     "gpt-4": "player1",
     "llama3": "player2",
 }
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _headers() -> dict[str, str]:
-    return {"X-ENGINE-KEY": ENGINE_KEY, "Content-Type": "application/json"}
-
-
-def _campaign_id() -> str:
-    cid = DEFAULT_CAMPAIGN_ID
-    if not cid:
-        raise ValueError("DEFAULT_CAMPAIGN_ID is not set")
-    return cid
-
-
-def _actor_id(model: str) -> str:
-    return MODEL_TO_ACTOR.get(model, "dm")
-
-
-def _get(path: str, params: dict | None = None) -> str:
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(f"{ENGINE_URL}{path}", headers=_headers(), params=params or {})
-            resp.raise_for_status()
-            return resp.text
-    except Exception as exc:
-        return json.dumps({"error": str(exc)})
-
-
-def _post(path: str, body: dict) -> str:
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(f"{ENGINE_URL}{path}", headers=_headers(), json=body)
-            resp.raise_for_status()
-            return resp.text
-    except Exception as exc:
-        return json.dumps({"error": str(exc)})
 
 
 # ── OpenWebUI Function Class ──────────────────────────────────────────────────
@@ -146,14 +109,15 @@ class Tools:
         actor = viewer or self._actor(__model__)
         return self._get("/state", params={"viewer": actor})
 
-    def list_events(self, after: str = "", __model__: Any = None) -> str:
+    def list_events(self, viewer: str = "", after: str = "", __model__: Any = None) -> str:
         """
         List events visible to the configured actor, optionally after a given event ID.
 
+        :param viewer: Actor ID of the viewer. Defaults to the resolved actor.
         :param after: Event ID to paginate from (optional).
         :return: JSON array of events.
         """
-        params: dict[str, str] = {"viewer": self._actor(__model__)}
+        params: dict[str, str] = {"viewer": viewer or self._actor(__model__)}
         if after:
             params["after"] = after
         return self._get("/events", params=params)
@@ -174,7 +138,7 @@ class Tools:
         }
         return self._post("/events", body)
 
-    def roll(self, expr: str, reason: str, __model__: Any = None) -> str:
+    def roll(self, expr: str, reason: str = "", __model__: Any = None) -> str:
         """
         Roll dice using standard notation and log the result.
 
@@ -185,7 +149,7 @@ class Tools:
         body = {"expr": expr, "reason": reason, "actor_id": self._actor(__model__)}
         return self._post("/roll", body)
 
-    def mutate(self, mutations: list, __model__: Any = None) -> str:
+    def mutate(self, mutations: list[dict], __model__: Any = None) -> str:
         """
         Apply state mutations to the campaign (HP changes, inventory, flags, etc.).
 
@@ -195,7 +159,7 @@ class Tools:
         body = {"actor_id": self._actor(__model__), "mutations": mutations}
         return self._post("/mutate", body)
 
-    def turn_advance(self) -> str:
+    def turn_advance(self, __model__: Any = None) -> str:
         """
         Advance the turn to the next actor. May trigger anti-ramble refocus.
 
@@ -203,9 +167,9 @@ class Tools:
         """
         return self._post("/turn/advance", {})
 
-    def advance_turn(self) -> str:
+    def advance_turn(self, __model__: Any = None) -> str:
         """Backward-compatible alias for turn_advance."""
-        return self.turn_advance()
+        return self.turn_advance(__model__)
 
     def director_next(self, max_events: int = 50, max_memories: int = 30, __model__: Any = None) -> str:
         """
@@ -231,11 +195,11 @@ class Tools:
             "actor_id": self._actor(__model__),
             "scope": scope,
             "text": text,
-            "tags": tags or [],
+            "tags": tags if tags is not None else [],
         }
         return self._post("/memory/write", body)
 
-    def memory_read(self, scope: str = "", __model__: Any = None) -> str:
+    def memory_read(self, scope: str = "party", __model__: Any = None) -> str:
         """
         Read memory entries visible to the configured actor.
 

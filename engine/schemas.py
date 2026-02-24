@@ -132,6 +132,7 @@ class DirectorMemoriesOut(BaseModel):
 class DirectorConstraintsOut(BaseModel):
     must_ask_question: bool
     max_output_sentences: int
+    stop_after_act: Optional[bool] = None
 
 
 class DirectorNextOut(BaseModel):
