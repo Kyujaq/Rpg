@@ -115,3 +115,30 @@ class StateOut(BaseModel):
     actors: List[ActorOut]
     state_kv: Dict[str, str]
     visible_events_count: int
+
+
+class DirectorNextRequest(BaseModel):
+    max_events: int = 50
+    max_memories: int = 30
+
+
+class DirectorMemoriesOut(BaseModel):
+    world: List[MemoryOut]
+    party: List[MemoryOut]
+    private: List[MemoryOut]
+
+
+class DirectorConstraintsOut(BaseModel):
+    must_ask_question: bool
+    max_output_sentences: int
+
+
+class DirectorNextOut(BaseModel):
+    should_act: bool
+    actor_id: Optional[str] = None
+    actor_role: Optional[str] = None
+    reason: str
+    viewer_state: Dict[str, Any]
+    visible_events: List[EventOut]
+    memories: DirectorMemoriesOut
+    constraints: DirectorConstraintsOut

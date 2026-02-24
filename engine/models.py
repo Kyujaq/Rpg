@@ -73,3 +73,12 @@ class StateKV(Base):
     key = Column(String, nullable=False)
     value = Column(String, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ActorCursor(Base):
+    __tablename__ = "actor_cursors"
+
+    id = Column(String, primary_key=True)
+    campaign_id = Column(String, ForeignKey("campaigns.id"), nullable=False)
+    actor_id = Column(String, ForeignKey("actors.id"), nullable=False)
+    last_seen_event_id = Column(String, nullable=True)

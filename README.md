@@ -65,6 +65,7 @@ uvicorn app:app --reload --port 8088
 | `POST` | `/v1/campaigns/{id}/memory/write` | Write a memory entry |
 | `GET` | `/v1/campaigns/{id}/memory/read?viewer={actor}` | Read memory |
 | `POST` | `/v1/campaigns/{id}/turn/advance` | Advance turn |
+| `POST` | `/v1/campaigns/{id}/director/next` | Get next actor + filtered context package |
 
 All endpoints require the `X-ENGINE-KEY` header.
 
@@ -119,6 +120,12 @@ This ensures human players are prompted to participate regularly.
 
 ---
 
+## AI Runner (local process)
+
+`runner/runner.py` polls `/v1/campaigns/{id}/director/next`, generates actor JSON via an OpenAI-compatible `/chat/completions` endpoint (e.g., Ollama), then writes `say` to `/events` and player `think` to `/memory/write`.
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -127,6 +134,7 @@ This ensures human players are prompted to participate regularly.
 | `DATABASE_URL` | `sqlite:///./ttrpg.db` | SQLAlchemy database URL |
 | `AI_ONLY_STREAK_LIMIT` | `3` | AI turns before refocus triggers |
 | `AI_PLAYER_COOLDOWN_SECONDS` | `30` | Cooldown between AI turns |
+| `DM_OMNISCIENT_PRIVATE` | `true` | If false, DM cannot see other actors' private:* content |
 | `DEFAULT_CAMPAIGN_ID` | *(empty)* | Default campaign for OpenWebUI tools |
 
 ---

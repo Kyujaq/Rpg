@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./ttrpg.db"
     AI_ONLY_STREAK_LIMIT: int = 3
     AI_PLAYER_COOLDOWN_SECONDS: int = 30
+    DM_OMNISCIENT_PRIVATE: bool = True
 
     class Config:
         env_file = ".env"
