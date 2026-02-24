@@ -49,7 +49,7 @@ def _get_cursor(db: Session, campaign_id: str, actor_id: str) -> ActorCursor:
         return cursor
 
     cursor = ActorCursor(
-        id=uuid.uuid4().hex[:8],
+        id=uuid.uuid4().hex,
         campaign_id=campaign_id,
         actor_id=actor_id,
         last_seen_event_id=None,
@@ -94,7 +94,7 @@ def next_director_context(db: Session, campaign_id: str, body: DirectorNextReque
         elif mem.scope == "party":
             if len(grouped["party"]) < body.max_memories:
                 grouped["party"].append(mem_out)
-        elif mem.scope == "private" and actor.actor_type in ("player", "dm"):
+        elif mem.scope == "private":
             if len(grouped["private"]) < body.max_memories:
                 grouped["private"].append(mem_out)
 

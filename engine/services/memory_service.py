@@ -59,6 +59,5 @@ def read_memory(
                 result.append(mem)
             elif viewer_is_dm and dm_omniscient_private:
                 result.append(mem)
-        # dm_only: not visible to non-dm
 
     return result

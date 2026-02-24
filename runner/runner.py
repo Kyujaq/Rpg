@@ -116,6 +116,7 @@ def _apply_actor_output(actor_id: str, actor_role: str, model_output: dict):
                 },
             )
 
+    # Always advance to prevent actor stalls when model returns empty fields.
     _engine_post("/turn/advance", {})
 
 
