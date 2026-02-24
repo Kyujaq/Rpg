@@ -37,7 +37,9 @@ def test_advance_turn_cycles(client, campaign):
     for _ in range(3):
         resp = advance_turn(client, cid)
         assert resp.status_code == 200
-        owners.append(resp.json()["turn_owner"])
+        payload = resp.json()
+        owners.append(payload["turn_owner"])
+        assert "last_event_id" in payload
 
     # Should have cycled through different owners
     assert len(set(owners)) > 1

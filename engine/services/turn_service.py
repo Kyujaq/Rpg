@@ -80,4 +80,5 @@ def advance_turn(db: Session, campaign_id: str) -> TurnAdvanceOut:
         turn_owner=next_owner_id,
         ai_only_streak=streak,
         refocus_triggered=refocus_triggered,
+        last_event_id=last_event.id if last_event else None,
     )

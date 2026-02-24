@@ -69,7 +69,9 @@ class Tools:
         engine_url: str = ENGINE_URL
         engine_key: str = ENGINE_KEY
         campaign_id: str = DEFAULT_CAMPAIGN_ID
-        actor_id: str = "dm"
+        actor_id: str = ""
+        use_model_to_actor_mapping: bool = True
+        default_actor_id: str = "human"
 
     def __init__(self):
         self.valves = self.Valves()
@@ -85,8 +87,21 @@ class Tools:
             raise ValueError("campaign_id valve is not set")
         return f"{self.valves.engine_url}/v1/campaigns/{cid}"
 
-    def _actor(self) -> str:
-        return self.valves.actor_id or "dm"
+    def _model_name(self, __model__: Any = None) -> str:
+        if isinstance(__model__, dict):
+            return str(__model__.get("id") or __model__.get("name") or "")
+        if __model__ is not None:
+            return str(getattr(__model__, "id", "") or getattr(__model__, "name", "") or "")
+        return ""
+
+    def _actor(self, __model__: Any = None) -> str:
+        if self.valves.actor_id:
+            return self.valves.actor_id
+        if self.valves.use_model_to_actor_mapping:
+            model_name = self._model_name(__model__)
+            if model_name in MODEL_TO_ACTOR:
+                return MODEL_TO_ACTOR[model_name]
+        return self.valves.default_actor_id or "human"
 
     def _get(self, path: str, params: dict | None = None) -> str:
         try:
@@ -116,7 +131,7 @@ class Tools:
 
     # ── Tools ─────────────────────────────────────────────────────────────────
 
-    def get_state(self, viewer: str = "") -> str:
+    def get_state(self, viewer: str = "", __model__: Any = None) -> str:
         """
         Get the current campaign state visible to the given actor.
 
@@ -125,22 +140,22 @@ class Tools:
             to the actor ID resolved from MODEL_TO_ACTOR for the current model.
         :return: JSON string with campaign state.
         """
-        actor = viewer or self._actor()
+        actor = viewer or self._actor(__model__)
         return self._get("/state", params={"viewer": actor})
 
-    def list_events(self, after: str = "") -> str:
+    def list_events(self, after: str = "", __model__: Any = None) -> str:
         """
         List events visible to the configured actor, optionally after a given event ID.
 
         :param after: Event ID to paginate from (optional).
         :return: JSON array of events.
         """
-        params: dict[str, str] = {"viewer": self._actor()}
+        params: dict[str, str] = {"viewer": self._actor(__model__)}
         if after:
             params["after"] = after
         return self._get("/events", params=params)
 
-    def log_utterance(self, text: str, visibility: str = "public") -> str:
+    def log_utterance(self, text: str, visibility: str = "public", __model__: Any = None) -> str:
         """
         Log a spoken utterance as an event in the campaign.
 
@@ -149,14 +164,14 @@ class Tools:
         :return: JSON of the created event.
         """
         body = {
-            "actor_id": self._actor(),
+            "actor_id": self._actor(__model__),
             "event_type": "utterance",
             "content": text,
             "visibility": visibility,
         }
         return self._post("/events", body)
 
-    def roll(self, expr: str, reason: str) -> str:
+    def roll(self, expr: str, reason: str, __model__: Any = None) -> str:
         """
         Roll dice using standard notation and log the result.
 
@@ -164,28 +179,43 @@ class Tools:
         :param reason: Reason for the roll, e.g. 'attack roll'.
         :return: JSON roll result with breakdown.
         """
-        body = {"expr": expr, "reason": reason, "actor_id": self._actor()}
+        body = {"expr": expr, "reason": reason, "actor_id": self._actor(__model__)}
         return self._post("/roll", body)
 
-    def mutate(self, mutations: list) -> str:
+    def mutate(self, mutations: list, __model__: Any = None) -> str:
         """
         Apply state mutations to the campaign (HP changes, inventory, flags, etc.).
 
         :param mutations: List of mutation objects, each with 'type' and 'payload'.
         :return: JSON summary of applied mutations.
         """
-        body = {"actor_id": self._actor(), "mutations": mutations}
+        body = {"actor_id": self._actor(__model__), "mutations": mutations}
         return self._post("/mutate", body)
 
-    def advance_turn(self) -> str:
+    def turn_advance(self) -> str:
         """
         Advance the turn to the next actor. May trigger anti-ramble refocus.
 
-        :return: JSON with new turn_owner, ai_only_streak, and refocus_triggered.
+        :return: JSON with turn_owner, ai_only_streak, refocus_triggered, and last_event_id.
         """
         return self._post("/turn/advance", {})
 
-    def memory_write(self, scope: str, text: str, tags: list[str] | None = None) -> str:
+    def advance_turn(self) -> str:
+        """Backward-compatible alias for turn_advance."""
+        return self.turn_advance()
+
+    def director_next(self, max_events: int = 50, max_memories: int = 30, __model__: Any = None) -> str:
+        """
+        Get the director package for what should happen next.
+
+        :return: Raw JSON response from the engine.
+        """
+        return self._post(
+            "/director/next",
+            {"max_events": max_events, "max_memories": max_memories, "actor_id": self._actor(__model__)},
+        )
+
+    def memory_write(self, scope: str, text: str, tags: list[str] | None = None, __model__: Any = None) -> str:
         """
         Write a memory entry to the campaign memory store.
 
@@ -195,21 +225,21 @@ class Tools:
         :return: JSON of the created memory entry.
         """
         body = {
-            "actor_id": self._actor(),
+            "actor_id": self._actor(__model__),
             "scope": scope,
             "text": text,
             "tags": tags or [],
         }
         return self._post("/memory/write", body)
 
-    def memory_read(self, scope: str = "") -> str:
+    def memory_read(self, scope: str = "", __model__: Any = None) -> str:
         """
         Read memory entries visible to the configured actor.
 
         :param scope: Optional scope filter — public, party, private, world, dm_only.
         :return: JSON array of memory entries.
         """
-        params: dict[str, str] = {"viewer": self._actor()}
+        params: dict[str, str] = {"viewer": self._actor(__model__)}
         if scope:
             params["scope"] = scope
         return self._get("/memory/read", params=params)

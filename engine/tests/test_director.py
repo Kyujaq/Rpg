@@ -77,6 +77,7 @@ def test_director_filters_private_context_for_player(client):
 
     post_event(client, cid, "player2", "private:player2", "player2 secret")
     post_event(client, cid, "player2", "party", "player2 party")
+    post_event(client, cid, "dm", "party", "@player1, react to this.")
     write_memory(client, cid, "player2", "private", "player2 private memory")
     write_memory(client, cid, "player2", "party", "player2 party memory")
 
@@ -98,3 +99,41 @@ def test_director_dm_non_omniscient_private_filter(client, campaign, monkeypatch
     data = director_next(client, cid)
     assert all(e["content"] != "hidden from dm" for e in data["visible_events"])
     assert all(m["text"] != "hidden memory from dm" for m in data["memories"]["private"])
+
+
+def test_director_refocus_constraints_when_ai_streak_high(client, campaign):
+    cid = campaign["id"]
+    post_event(client, cid, "dm", "public", "AI 1")
+    client.post(f"/v1/campaigns/{cid}/turn/advance", headers={"X-ENGINE-KEY": "test-key"})
+    post_event(client, cid, "player1", "public", "AI 2")
+    client.post(f"/v1/campaigns/{cid}/turn/advance", headers={"X-ENGINE-KEY": "test-key"})
+    post_event(client, cid, "dm", "public", "AI 3")
+    client.post(f"/v1/campaigns/{cid}/turn/advance", headers={"X-ENGINE-KEY": "test-key"})
+
+    data = director_next(client, cid)
+    assert data["reason"] == "refocus"
+    assert data["constraints"]["must_ask_question"] is True
+
+
+def test_director_blocks_ai_player_without_human_or_direct_address(client):
+    cid = create_campaign(
+        client,
+        [
+            {"id": "dm", "name": "Dungeon Master", "actor_type": "dm", "is_ai": True},
+            {"id": "player1", "name": "Player One", "actor_type": "player", "is_ai": True},
+            {"id": "human", "name": "Human", "actor_type": "human", "is_ai": False},
+        ],
+    )
+    resp = client.post(f"/v1/campaigns/{cid}/turn/advance", headers={"X-ENGINE-KEY": "test-key"})
+    assert resp.status_code == 200
+    if resp.json()["turn_owner"] != "player1":
+        resp = client.post(f"/v1/campaigns/{cid}/turn/advance", headers={"X-ENGINE-KEY": "test-key"})
+        assert resp.status_code == 200
+    assert resp.json()["turn_owner"] == "player1"
+
+    blocked = director_next(client, cid)
+    assert blocked["should_act"] is False
+
+    post_event(client, cid, "dm", "party", "@player1 what do you do?")
+    allowed = director_next(client, cid)
+    assert allowed["should_act"] is True
