@@ -2,11 +2,19 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from config import settings
 from models import Actor, Event
 from schemas import EventCreate
 
 
-def is_visible(event: Event, viewer_actor_id: str, viewer_is_dm: bool) -> bool:
+def is_visible(
+    event: Event,
+    viewer_actor_id: str,
+    viewer_is_dm: bool,
+    dm_omniscient_private: Optional[bool] = None,
+) -> bool:
+    if dm_omniscient_private is None:
+        dm_omniscient_private = settings.DM_OMNISCIENT_PRIVATE
     vis = event.visibility
 
     if vis == "public":
@@ -17,7 +25,11 @@ def is_visible(event: Event, viewer_actor_id: str, viewer_is_dm: bool) -> bool:
         return viewer_is_dm
     elif vis.startswith("private:"):
         target_actor_id = vis.split(":", 1)[1]
-        return viewer_actor_id == target_actor_id or viewer_is_dm
+        if viewer_actor_id == target_actor_id:
+            return True
+        if viewer_is_dm and dm_omniscient_private:
+            return True
+        return False
 
     return False
 
