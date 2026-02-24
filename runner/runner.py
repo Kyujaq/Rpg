@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import re
@@ -181,10 +182,13 @@ def tick() -> int:
             {"max_events": RUNNER_MAX_EVENTS, "max_memories": RUNNER_MAX_MEMORIES},
         )
         if not director.get("should_act"):
+            reason = director.get("reason", "unknown")
+            print(f"[runner] stopped: should_act=false reason={reason}")
             break
         actor_id = director.get("actor_id")
         role = director.get("actor_role")
         if not actor_id:
+            print("[runner] stopped: no actor_id in director response")
             break
 
         if (
@@ -192,6 +196,7 @@ def tick() -> int:
             and _is_actor_ai(_last_visible_event_actor_id(director), director)
             and director.get("reason") != "turn_owner"
         ):
+            print(f"[runner] stopped: ai-to-ai safety guard triggered for actor '{actor_id}'")
             break
 
         output = None
@@ -214,13 +219,38 @@ def tick() -> int:
             output = _enforce_dm_constraints(output, director)
 
         _apply_actor_output(actor_id, role, output)
+        print(f"[runner] actor '{actor_id}' acted (role={role})")
         acted += 1
     return acted
 
 
 def main():
+    parser = argparse.ArgumentParser(description="TTRPG Engine Runner")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--once",
+        action="store_true",
+        help="Run exactly one bounded tick and exit.",
+    )
+    mode_group.add_argument(
+        "--watch",
+        action="store_true",
+        help="Poll continuously and tick when needed (default behaviour).",
+    )
+    args = parser.parse_args()
+
     if not CAMPAIGN_ID:
         raise ValueError("CAMPAIGN_ID is required")
+
+    if args.once:
+        try:
+            acted = tick()
+            print(f"[runner] tick complete: {acted} actor(s) acted")
+        except Exception as exc:
+            print(f"[runner] error: {exc}")
+        return
+
+    # --watch or default: continuous polling loop
     while True:
         try:
             tick()

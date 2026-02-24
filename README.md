@@ -130,6 +130,93 @@ This ensures human players are prompted to participate regularly.
 
 ---
 
+## Demo Campaign + Voice-to-Text Test Recipe
+
+This recipe walks you through a full end-to-end test from a fresh checkout.
+
+### 1 — Start the engine
+
+```bash
+cp .env.example .env
+# Set ENGINE_KEY and other values in .env
+docker compose up --build
+```
+
+The API is available at `http://localhost:8088/docs`.
+
+### 2 — Create the demo campaign
+
+```bash
+export ENGINE_URL=http://localhost:8088
+export ENGINE_KEY=dev-secret-key
+CAMPAIGN_ID=$(python scripts/create_demo_campaign.py)
+echo "Campaign ID: $CAMPAIGN_ID"
+```
+
+The script creates three actors: `dm` (AI), `player1` (AI), and `human` (not AI), then prints the campaign ID.
+
+### 3 — Install the Function in OpenWebUI
+
+1. Open OpenWebUI → **Workspace → Functions → New Function**.
+2. Paste the full contents of `openwebui_function/ttrpg_engine_tools.py`.
+3. Save and enable the function.
+
+### 4 — Set the valves
+
+In OpenWebUI, open the function's valve settings and fill in:
+
+| Valve | Value |
+|-------|-------|
+| `engine_url` | `http://localhost:8088` (or your Docker host IP) |
+| `engine_key` | value of `ENGINE_KEY` in your `.env` |
+| `campaign_id` | the ID printed by `create_demo_campaign.py` |
+| `actor_id` | *(leave empty — resolved via model mapping)* |
+| `use_model_to_actor_mapping` | `true` |
+| `default_actor_id` | `human` |
+
+Example `MODEL_TO_ACTOR` mapping inside the file (edit to match your OpenWebUI model names):
+
+```python
+MODEL_TO_ACTOR: dict[str, str] = {
+    "gpt-4o": "dm",       # DM chat uses gpt-4o
+    "llama3": "player1",  # AI player chat uses llama3
+    # human chat uses default_actor_id = "human"
+}
+```
+
+### 5 — Enable voice-to-text and speak
+
+1. In OpenWebUI, open a new chat set to the **human** model/context.
+2. Enable voice-to-text (microphone icon).
+3. Speak your action, e.g. *"I look around the room for traps."*
+4. The transcription is sent as a message. The function calls `log_utterance` automatically.
+
+### 6 — Run the runner (one tick)
+
+In a separate terminal:
+
+```bash
+CAMPAIGN_ID=<your-campaign-id> python runner/runner.py --once
+```
+
+Expected output:
+```
+[runner] actor 'dm' acted (role=dm)
+[runner] tick complete: 1 actor(s) acted
+```
+
+The DM's response is logged to the engine and visible in the campaign event log. Switch to the DM chat in OpenWebUI to see the response.
+
+### 7 — Continuous mode (optional)
+
+```bash
+CAMPAIGN_ID=<your-campaign-id> python runner/runner.py --watch
+```
+
+This polls continuously and acts whenever a new human input arrives.
+
+---
+
 ## AI Runner (local process)
 
 `runner/runner.py` polls `/v1/campaigns/{id}/director/next`, generates actor JSON via an OpenAI-compatible `/chat/completions` endpoint (e.g., Ollama), then writes `say` to `/events` and player `think` to `/memory/write`.
