@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from urllib import request
 from urllib.error import HTTPError, URLError
@@ -16,6 +17,8 @@ POLL_SECONDS = float(os.getenv("POLL_SECONDS", "1.0"))
 RUNNER_MAX_EVENTS = int(os.getenv("RUNNER_MAX_EVENTS", "50"))
 RUNNER_MAX_MEMORIES = int(os.getenv("RUNNER_MAX_MEMORIES", "30"))
 MAX_AUTO_TURNS_PER_TICK = int(os.getenv("MAX_AUTO_TURNS_PER_TICK", "2"))
+MAX_MODEL_JSON_RETRIES = 2
+DM_REFOCUS_ASK_FALLBACK = "What do you do next?"
 
 
 def _post_json(url: str, body: dict, headers: dict | None = None) -> dict:
@@ -95,7 +98,7 @@ def _call_model(actor_id: str, actor_role: str, director_payload: dict) -> dict:
 def _shorten_text(text: str, max_sentences: int = 2) -> str:
     if not text:
         return ""
-    parts = [p.strip() for p in text.replace("!", ".").replace("?", ".").split(".") if p.strip()]
+    parts = [p.strip() for p in re.split(r"[.!?]+", text) if p.strip()]
     return ". ".join(parts[:max_sentences]) + ("." if parts else "")
 
 
@@ -107,7 +110,7 @@ def _enforce_dm_constraints(model_output: dict, director_payload: dict) -> dict:
     output = dict(model_output)
     output["say"] = _shorten_text((output.get("say") or "").strip(), max_sentences=2)
     ask = (output.get("ask") or "").strip()
-    output["ask"] = ask if ask.endswith("?") and ask else "What do you do next?"
+    output["ask"] = ask if (ask and ask.endswith("?")) else DM_REFOCUS_ASK_FALLBACK
     return output
 
 
@@ -170,6 +173,7 @@ def _apply_actor_output(actor_id: str, actor_role: str, model_output: dict):
 
 
 def tick() -> int:
+    """Run one bounded automation tick and return how many actors acted."""
     acted = 0
     for _ in range(MAX_AUTO_TURNS_PER_TICK):
         director = _engine_post(
@@ -191,16 +195,16 @@ def tick() -> int:
             break
 
         output = None
-        for attempt in range(2):
+        for attempt in range(MAX_MODEL_JSON_RETRIES):
             try:
                 output = _call_model(actor_id, role, director)
                 break
             except json.JSONDecodeError:
-                if attempt == 1:
+                if attempt == MAX_MODEL_JSON_RETRIES - 1:
                     _log_runner_error(f"[runner] invalid JSON from model for actor '{actor_id}'")
                     return acted
             except (KeyError, HTTPError, URLError):
-                if attempt == 1:
+                if attempt == MAX_MODEL_JSON_RETRIES - 1:
                     _log_runner_error(f"[runner] model call failed for actor '{actor_id}'")
                     return acted
 

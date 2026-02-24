@@ -126,7 +126,7 @@ This ensures human players are prompted to participate regularly.
    ```bash
    python runner/runner.py
    ```
-6. Create separate chats/models for DM and AI players; leave `actor_id` empty and use `use_model_to_actor_mapping=true`, with `default_actor_id=human` for the human chat.
+6. Create separate chats/models for DM and AI players; leave `actor_id` empty and use `use_model_to_actor_mapping=true`, with `default_actor_id=human` for the human chat. Update `MODEL_TO_ACTOR` in `openwebui_function/ttrpg_engine_tools.py` (example: `{"gpt-4o":"dm","llama3":"player1","gpt-4":"human"}`).
 
 ---
 

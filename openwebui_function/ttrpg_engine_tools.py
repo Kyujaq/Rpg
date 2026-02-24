@@ -65,7 +65,10 @@ class Tools:
     """TTRPG Engine tools exposed to OpenWebUI."""
 
     class Valves:
-        """User-configurable settings (shown in OpenWebUI UI)."""
+        """
+        User-configurable settings (shown in OpenWebUI UI).
+        Actor resolution order: actor_id valve -> MODEL_TO_ACTOR (if enabled) -> default_actor_id.
+        """
         engine_url: str = ENGINE_URL
         engine_key: str = ENGINE_KEY
         campaign_id: str = DEFAULT_CAMPAIGN_ID

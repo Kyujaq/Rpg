@@ -15,6 +15,9 @@ from services.event_service import list_events
 from services.memory_service import read_memory
 from services.state_service import get_campaign_state
 
+AI_ONLY_STREAK_THRESHOLD = 3
+RECENT_EVENTS_LOOKBACK = 6
+
 
 def _to_memory_out(memory) -> MemoryOut:
     tags = json.loads(memory.tags) if isinstance(memory.tags, str) else memory.tags
@@ -132,7 +135,7 @@ def next_director_context(db: Session, campaign_id: str, body: DirectorNextReque
         db.query(Event)
         .filter(Event.campaign_id == campaign_id)
         .order_by(Event.created_at.desc())
-        .limit(6)
+        .limit(RECENT_EVENTS_LOOKBACK)
         .all()
     )
     has_human_input = any(
@@ -175,8 +178,8 @@ def next_director_context(db: Session, campaign_id: str, body: DirectorNextReque
 
     last_event = _last_event(db, campaign_id)
     must_refocus = (
-        campaign.ai_only_streak >= 3
-        or _recent_ai_only_streak(db, campaign_id, limit=3) >= 3
+        campaign.ai_only_streak >= AI_ONLY_STREAK_THRESHOLD
+        or _recent_ai_only_streak(db, campaign_id, limit=AI_ONLY_STREAK_THRESHOLD) >= AI_ONLY_STREAK_THRESHOLD
         or (last_event is not None and last_event.event_type == "system_refocus")
     )
     return DirectorNextOut(
