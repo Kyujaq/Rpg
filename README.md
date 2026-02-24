@@ -109,14 +109,24 @@ This ensures human players are prompted to participate regularly.
 
 ## OpenWebUI Setup
 
-1. Copy `openwebui_function/ttrpg_engine_tools.py` into your OpenWebUI **Functions** directory.
-2. Set environment variables (or Valves in the UI):
-   - `ENGINE_URL` — URL to the running engine (e.g. `http://localhost:8088`)
-   - `ENGINE_KEY` — Must match the server's `ENGINE_KEY`
-   - `DEFAULT_CAMPAIGN_ID` — The campaign ID to use
-   - `actor_id` — The actor this model plays (e.g. `dm`, `player1`)
-3. Assign different models as different actors in `MODEL_TO_ACTOR`.
-4. Enable voice-to-text in OpenWebUI and use `log_utterance` for spoken input.
+1. Start engine: `docker compose up --build`
+2. Create campaign:
+   ```bash
+   curl -X POST http://localhost:8088/v1/campaigns \
+     -H "X-ENGINE-KEY: dev-secret-key" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"OpenWebUI Test","actors":[{"id":"dm","name":"DM","actor_type":"dm","is_ai":true},{"id":"player1","name":"Player 1","actor_type":"player","is_ai":true},{"id":"human","name":"Human","actor_type":"human","is_ai":false}]}'
+   ```
+3. Copy `openwebui_function/ttrpg_engine_tools.py` into OpenWebUI **Functions**.
+4. Set valves in OpenWebUI:
+   - `engine_url` (e.g. `http://localhost:8088`)
+   - `engine_key` (must match `ENGINE_KEY`)
+   - `campaign_id` (ID returned by create campaign)
+5. Open a **Human** chat, use voice-to-text, call `log_utterance`, then in another terminal run:
+   ```bash
+   python runner/runner.py
+   ```
+6. Create separate chats/models for DM and AI players; leave `actor_id` empty and use `use_model_to_actor_mapping=true`, with `default_actor_id=human` for the human chat. Update `MODEL_TO_ACTOR` in `openwebui_function/ttrpg_engine_tools.py` (example: `{"gpt-4o":"dm","llama3":"player1","gpt-4":"human"}`).
 
 ---
 

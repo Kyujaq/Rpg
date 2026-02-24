@@ -1,7 +1,9 @@
 import json
 import os
+import re
 import time
 from urllib import request
+from urllib.error import HTTPError, URLError
 
 
 ENGINE_URL = os.getenv("ENGINE_URL", "http://localhost:8088")
@@ -14,6 +16,9 @@ PLAYER_MODEL = os.getenv("PLAYER_MODEL", "llama3")
 POLL_SECONDS = float(os.getenv("POLL_SECONDS", "1.0"))
 RUNNER_MAX_EVENTS = int(os.getenv("RUNNER_MAX_EVENTS", "50"))
 RUNNER_MAX_MEMORIES = int(os.getenv("RUNNER_MAX_MEMORIES", "30"))
+MAX_AUTO_TURNS_PER_TICK = int(os.getenv("MAX_AUTO_TURNS_PER_TICK", "2"))
+MAX_MODEL_JSON_RETRIES = 2
+DM_REFOCUS_ASK_FALLBACK = "What do you do next?"
 
 
 def _post_json(url: str, body: dict, headers: dict | None = None) -> dict:
@@ -90,6 +95,49 @@ def _call_model(actor_id: str, actor_role: str, director_payload: dict) -> dict:
     return json.loads(content)
 
 
+def _shorten_text(text: str, max_sentences: int = 2) -> str:
+    if not text:
+        return ""
+    parts = [p.strip() for p in re.split(r"[.!?]+", text) if p.strip()]
+    return ". ".join(parts[:max_sentences]) + ("." if parts else "")
+
+
+def _enforce_dm_constraints(model_output: dict, director_payload: dict) -> dict:
+    constraints = director_payload.get("constraints") or {}
+    if not constraints.get("must_ask_question"):
+        return model_output
+
+    output = dict(model_output)
+    output["say"] = _shorten_text((output.get("say") or "").strip(), max_sentences=2)
+    ask = (output.get("ask") or "").strip()
+    output["ask"] = ask if (ask and ask.endswith("?")) else DM_REFOCUS_ASK_FALLBACK
+    return output
+
+
+def _log_runner_error(message: str):
+    _engine_post(
+        "/events",
+        {
+            "actor_id": "system",
+            "event_type": "runner_error",
+            "content": message,
+            "visibility": "public",
+        },
+    )
+
+
+def _last_visible_event_actor_id(director_payload: dict) -> str:
+    visible_events = director_payload.get("visible_events") or []
+    if not visible_events:
+        return ""
+    return str(visible_events[-1].get("actor_id") or "")
+
+
+def _is_actor_ai(actor_id: str, director_payload: dict) -> bool:
+    actors = (director_payload.get("viewer_state") or {}).get("actors") or []
+    return any(a.get("id") == actor_id and a.get("is_ai") for a in actors)
+
+
 def _apply_actor_output(actor_id: str, actor_role: str, model_output: dict):
     say = (model_output.get("say") or "").strip()
     if say:
@@ -115,34 +163,58 @@ def _apply_actor_output(actor_id: str, actor_role: str, model_output: dict):
                     "tags": [],
                 },
             )
+    else:
+        state_updates = model_output.get("state_updates") or []
+        if state_updates:
+            _engine_post("/mutate", {"actor_id": actor_id, "mutations": state_updates})
 
     # Always advance to prevent actor stalls when model returns empty fields.
     _engine_post("/turn/advance", {})
 
 
-def run_once(max_steps: int = 2) -> int:
+def tick() -> int:
+    """Run one bounded automation tick and return how many actors acted."""
     acted = 0
-    for _ in range(max_steps):
+    for _ in range(MAX_AUTO_TURNS_PER_TICK):
         director = _engine_post(
             "/director/next",
             {"max_events": RUNNER_MAX_EVENTS, "max_memories": RUNNER_MAX_MEMORIES},
         )
         if not director.get("should_act"):
             break
-        role = director.get("actor_role")
         actor_id = director.get("actor_id")
+        role = director.get("actor_role")
         if not actor_id:
             break
 
-        if acted == 1 and role != "player":
+        if (
+            _is_actor_ai(actor_id, director)
+            and _is_actor_ai(_last_visible_event_actor_id(director), director)
+            and director.get("reason") != "turn_owner"
+        ):
             break
 
-        output = _call_model(actor_id, role, director)
+        output = None
+        for attempt in range(MAX_MODEL_JSON_RETRIES):
+            try:
+                output = _call_model(actor_id, role, director)
+                break
+            except json.JSONDecodeError:
+                if attempt == MAX_MODEL_JSON_RETRIES - 1:
+                    _log_runner_error(f"[runner] invalid JSON from model for actor '{actor_id}'")
+                    return acted
+            except (KeyError, HTTPError, URLError):
+                if attempt == MAX_MODEL_JSON_RETRIES - 1:
+                    _log_runner_error(f"[runner] model call failed for actor '{actor_id}'")
+                    return acted
+
+        if output is None:
+            return acted
+        if role == "dm":
+            output = _enforce_dm_constraints(output, director)
+
         _apply_actor_output(actor_id, role, output)
         acted += 1
-
-        if acted == 1 and role != "dm":
-            break
     return acted
 
 
@@ -151,7 +223,7 @@ def main():
         raise ValueError("CAMPAIGN_ID is required")
     while True:
         try:
-            run_once()
+            tick()
         except Exception as exc:
             print(f"[runner] error: {exc}")
         time.sleep(POLL_SECONDS)

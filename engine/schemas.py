@@ -87,6 +87,7 @@ class TurnAdvanceOut(BaseModel):
     turn_owner: str
     ai_only_streak: int
     refocus_triggered: bool
+    last_event_id: Optional[str] = None
 
 
 class MemoryWrite(BaseModel):
